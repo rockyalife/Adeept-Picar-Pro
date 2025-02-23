@@ -1,48 +1,55 @@
-#!/usr/bin/env/python
+#!/usr/bin/env python
 # File name   : server.py
 # Production  : GWR
 # Website     : www.adeept.com
-# Author      : William
-# Date        : 2020/03/17
+# Author      : William (modified by ChatGPT for CircuitPython PCA9685)
+# Date        : 2020/03/17 (modified for Raspberry Pi 5 with Blinka)
 
 import time
 import threading
-import move
-import Adafruit_PCA9685
 import os
 import info
+import socket
+
+# Import CircuitPython I2C libraries; they will be used by RPIservo.
+import board
+import busio
+
+# Initialize I2C for use by our updated RPIservo module
+i2c = busio.I2C(board.SCL, board.SDA)
+
+# Now import our updated RPIservo (which uses adafruit-circuitpython-pca9685)
 import RPIservo
 
+import move
 import functions
 import robotLight
 import switch
-import socket
 
-#websocket
+# Websocket and JSON handling
 import asyncio
 import websockets
-
 import json
 import app
 
+# OLED setup
 OLED_connection = 1
 try:
     import OLED
     screen = OLED.OLED_ctrl()
     screen.start()
     screen.screen_show(1, 'ADEEPT.COM')
-except:
+except Exception as e:
     OLED_connection = 0
-    print('OLED disconnected')
-    pass
+    print('OLED disconnected:', e)
 
 mark_test = 0
-
 functionMode = 0
 speed_set = 100
 rad = 0.5
 turnWiggle = 60
 
+# Initialize servo controllers from our updated RPIservo module
 scGear = RPIservo.ServoCtrl()
 scGear.moveInit()
 
@@ -58,17 +65,12 @@ H_sc.start()
 G_sc = RPIservo.ServoCtrl()
 G_sc.start()
 
-# modeSelect = 'none'
 modeSelect = 'PT'
 
+# Save initial PWM positions
 init_pwm = []
 for i in range(16):
     init_pwm.append(scGear.initPos[i])
-# init_pwm0 = scGear.initPos[0]
-# init_pwm1 = scGear.initPos[1]
-# init_pwm2 = scGear.initPos[2]
-# init_pwm3 = scGear.initPos[3]
-# init_pwm4 = scGear.initPos[4]
 
 fuc = functions.Functions()
 fuc.start()
@@ -77,295 +79,215 @@ curpath = os.path.realpath(__file__)
 thisPath = "/" + os.path.dirname(curpath)
 
 def servoPosInit():
-    scGear.initConfig(0,init_pwm[0],1)
-    P_sc.initConfig(1,init_pwm[1],1)
-    T_sc.initConfig(2,init_pwm[2],1)
-    H_sc.initConfig(3,init_pwm[3],1)
-    G_sc.initConfig(4,init_pwm[4],1)
+    scGear.initConfig(0, init_pwm[0], 1)
+    P_sc.initConfig(1, init_pwm[1], 1)
+    T_sc.initConfig(2, init_pwm[2], 1)
+    H_sc.initConfig(3, init_pwm[3], 1)
+    G_sc.initConfig(4, init_pwm[4], 1)
 
-
-def replace_num(initial,new_num):   #Call this function to replace data in '.txt' file
-    global r
-    newline=""
-    str_num=str(new_num)
-    with open(thisPath+"/RPIservo.py","r") as f:
+def replace_num(initial, new_num):
+    newline = ""
+    str_num = str(new_num)
+    with open(thisPath + "/RPIservo.py", "r") as f:
         for line in f.readlines():
-            if(line.find(initial) == 0):
-                line = initial+"%s" %(str_num+"\n")
+            if line.find(initial) == 0:
+                line = initial + "%s" % (str_num + "\n")
             newline += line
-    with open(thisPath+"/RPIservo.py","w") as f:
-        f.writelines(newline)
-
+    with open(thisPath + "/RPIservo.py", "w") as f:
+        f.write(newline)
 
 def FPV_thread():
     global fpv
-    fpv=FPV.FPV()
+    fpv = FPV.FPV()
     fpv.capture_thread(addr[0])
-
 
 def ap_thread():
     os.system("sudo create_ap wlan0 eth0 Adeept_Robot 12345678")
 
-
 def functionSelect(command_input, response):
     global functionMode
-    if 'scan' == command_input:
+    if command_input == 'scan':
         if OLED_connection:
-            screen.screen_show(5,'SCANNING')
+            screen.screen_show(5, 'SCANNING')
         if modeSelect == 'PT':
             radar_send = fuc.radarScan()
             print(radar_send)
             response['title'] = 'scanResult'
             response['data'] = radar_send
             time.sleep(0.3)
-
-    elif 'findColor' == command_input:
+    elif command_input == 'findColor':
         if OLED_connection:
-            screen.screen_show(5,'FindColor')
+            screen.screen_show(5, 'FindColor')
         if modeSelect == 'PT':
             flask_app.modeselect('findColor')
-
-    elif 'motionGet' == command_input:
+    elif command_input == 'motionGet':
         if OLED_connection:
-            screen.screen_show(5,'MotionGet')
+            screen.screen_show(5, 'MotionGet')
         flask_app.modeselect('watchDog')
-
-    elif 'stopCV' == command_input:
+    elif command_input == 'stopCV':
         flask_app.modeselect('none')
-        switch.switch(1,0)
-        switch.switch(2,0)
-        switch.switch(3,0)
-
-    elif 'police' == command_input:
+        switch.switch(1, 0)
+        switch.switch(2, 0)
+        switch.switch(3, 0)
+    elif command_input == 'police':
         if OLED_connection:
-            screen.screen_show(5,'POLICE')
+            screen.screen_show(5, 'POLICE')
         RL.police()
-
-    elif 'policeOff' == command_input:
+    elif command_input == 'policeOff':
         RL.pause()
         move.motorStop()
-
-    elif 'automatic' == command_input:
+    elif command_input == 'automatic':
         if OLED_connection:
-            screen.screen_show(5,'Automatic')
+            screen.screen_show(5, 'Automatic')
         if modeSelect == 'PT':
             fuc.automatic()
         else:
             fuc.pause()
-
-    elif 'automaticOff' == command_input:
+    elif command_input == 'automaticOff':
         fuc.pause()
         move.motorStop()
-
-    elif 'trackLine' == command_input:
+    elif command_input == 'trackLine':
         fuc.trackLine()
         if OLED_connection:
-            screen.screen_show(5,'TrackLine')
-
-    elif 'trackLineOff' == command_input:
+            screen.screen_show(5, 'TrackLine')
+    elif command_input == 'trackLineOff':
         fuc.pause()
-
-    # elif 'steadyCamera' == command_input:
-    #     if OLED_connection:
-    #         screen.screen_show(5,'SteadyCamera')
-    #     fuc.steady(T_sc.lastPos[2])
-
-    # elif 'steadyCameraOff' == command_input:
-    #     fuc.pause()
-    #     move.motorStop()
-
 
 def switchCtrl(command_input, response):
     if 'Switch_1_on' in command_input:
-        switch.switch(1,1)
-
+        switch.switch(1, 1)
     elif 'Switch_1_off' in command_input:
-        switch.switch(1,0)
-
+        switch.switch(1, 0)
     elif 'Switch_2_on' in command_input:
-        switch.switch(2,1)
-
+        switch.switch(2, 1)
     elif 'Switch_2_off' in command_input:
-        switch.switch(2,0)
-
+        switch.switch(2, 0)
     elif 'Switch_3_on' in command_input:
-        switch.switch(3,1)
-
+        switch.switch(3, 1)
     elif 'Switch_3_off' in command_input:
-        switch.switch(3,0) 
-
+        switch.switch(3, 0)
 
 def robotCtrl(command_input, response):
-    if 'forward' == command_input:
-        direction_command = 'forward'
+    if command_input == 'forward':
         move.move(speed_set, 'forward', 'no', rad)
-    
-    elif 'backward' == command_input:
-        direction_command = 'backward'
+    elif command_input == 'backward':
         move.move(speed_set, 'backward', 'no', rad)
-
     elif 'DS' in command_input:
-        direction_command = 'no'
         move.move(speed_set, 'no', 'no', rad)
-
-
-    elif 'left' == command_input:
-        scGear.moveAngle(0,turnWiggle)
-
-    elif 'right' == command_input:
-        scGear.moveAngle(0,-turnWiggle)
-
+    elif command_input == 'left':
+        scGear.moveAngle(0, turnWiggle)
+    elif command_input == 'right':
+        scGear.moveAngle(0, -turnWiggle)
     elif 'TS' in command_input:
         scGear.moveServoInit([0])
-
-    elif 'lookleft' == command_input:
+    elif command_input == 'lookleft':
         P_sc.singleServo(1, 1, 3)
-
-    elif 'lookright' == command_input:
+    elif command_input == 'lookright':
         P_sc.singleServo(1, -1, 3)
-
-    elif 'LRstop' in command_input:
+    elif command_input == 'LRstop':
         P_sc.stopWiggle()
-
-    elif 'armup' == command_input:
+    elif command_input == 'armup':
         T_sc.singleServo(2, 1, 3)
-
-    elif 'armdown' == command_input:
+    elif command_input == 'armdown':
         T_sc.singleServo(2, -1, 3)
-
-    elif 'armstop' in command_input:
+    elif command_input == 'armstop':
         T_sc.stopWiggle()
-
-    elif 'handup' == command_input:
+    elif command_input == 'handup':
         H_sc.singleServo(3, 1, 3)
-
-    elif 'handdown' == command_input:
+    elif command_input == 'handdown':
         H_sc.singleServo(3, -1, 3)
-
-    elif 'HAstop' in command_input:
+    elif command_input == 'HAstop':
         H_sc.stopWiggle()
-
-    elif 'grab' == command_input:
+    elif command_input == 'grab':
         G_sc.singleServo(4, -1, 3)
-
-    elif 'loose' == command_input:
+    elif command_input == 'loose':
         G_sc.singleServo(4, 1, 3)
-
-    elif 'stop' == command_input:
+    elif command_input == 'stop':
         G_sc.stopWiggle()
-
-    elif 'home' == command_input:
+    elif command_input == 'home':
         P_sc.moveServoInit([1])
         T_sc.moveServoInit([2])
         H_sc.moveServoInit([3])
         G_sc.moveServoInit([4])
 
-
 def setPWM(data):
     global init_pwm
     action = data.split()[0]
     PWMNum = int(data.split()[1])
-    
-    if 'SiLeft' == action:
-        print('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')
+    if action == 'SiLeft':
         init_pwm[PWMNum] += 1
-        scGear.setPWM(PWMNum,init_pwm[PWMNum])
-
-    elif 'SiRight' == action:
+        scGear.setPWM(PWMNum, init_pwm[PWMNum])
+    elif action == 'SiRight':
         init_pwm[PWMNum] -= 1
-        scGear.setPWM(PWMNum,init_pwm[PWMNum])
-    elif 'PWMMS' == action:
-        scGear.initConfig(PWMNum,init_pwm[PWMNum],1)
+        scGear.setPWM(PWMNum, init_pwm[PWMNum])
+    elif action == 'PWMMS':
+        scGear.initConfig(PWMNum, init_pwm[PWMNum], 1)
         replace_num('init_pwm' + str(PWMNum) + ' = ', init_pwm[PWMNum])
-
 
 def configPWM(command_input, response):
     global init_pwm
     if 'SiLeft' in command_input or 'SiRight' in command_input or 'PWMMS' in command_input:
         setPWM(command_input)
-
-    elif 'PWMINIT' == command_input:
+    elif command_input == 'PWMINIT':
         servoPosInit()
-
-    elif 'PWMD' == command_input:
-        init_pwm0,init_pwm1,init_pwm2,init_pwm3,init_pwm4=300,300,300,300,300
-        scGear.initConfig(0,init_pwm0,1)
+    elif command_input == 'PWMD':
+        init_pwm0, init_pwm1, init_pwm2, init_pwm3, init_pwm4 = 300, 300, 300, 300, 300
+        scGear.initConfig(0, init_pwm0, 1)
         replace_num('init_pwm0 = ', 300)
-
-        P_sc.initConfig(1,300,1)
+        P_sc.initConfig(1, 300, 1)
         replace_num('init_pwm1 = ', 300)
-
-        T_sc.initConfig(2,300,1)
+        T_sc.initConfig(2, 300, 1)
         replace_num('init_pwm2 = ', 300)
-
-        H_sc.initConfig(3,300,1)
+        H_sc.initConfig(3, 300, 1)
         replace_num('init_pwm3 = ', 300)
-
-        G_sc.initConfig(4,300,1)
+        G_sc.initConfig(4, 300, 1)
         replace_num('init_pwm4 = ', 300)
-
-        for i in range(5,16):
+        for i in range(5, 16):
             replace_num('init_pwm' + str(i) + ' = ', 300)
-
-
-# def update_code():
-#     # Update local to be consistent with remote
-#     projectPath = thisPath[:-7]
-#     with open(f'{projectPath}/config.json', 'r') as f1:
-#         config = json.load(f1)
-#         if not config['production']:
-#             print('Update code')
-#             # Force overwriting local code
-#             if os.system(f'cd {projectPath} && sudo git fetch --all && sudo git reset --hard origin/master && sudo git pull') == 0:
-#                 print('Update successfully')
-#                 print('Restarting...')
-#                 os.system('sudo reboot')
 
 def wifi_check():
     global mark_test
     try:
-        s =socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-        s.connect(("1.1.1.1",80))
-        ipaddr_check=s.getsockname()[0]
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("1.1.1.1", 80))
+        ipaddr_check = s.getsockname()[0]
         s.close()
         print(ipaddr_check)
-        #update_code()
         if OLED_connection:
-            screen.screen_show(2, 'IP:'+ipaddr_check)
+            screen.screen_show(2, 'IP:' + ipaddr_check)
             screen.screen_show(3, 'AP MODE OFF')
         mark_test = 1  
     except:
         if mark_test == 1:
             mark_test = 0
-            move.destroy()      # motor stop.
-            scGear.moveInit()   # servo  back initial position.
-
-        ap_threading=threading.Thread(target=ap_thread)   #Define a thread for data receiving
-        ap_threading.setDaemon(True)                          #'True' means it is a front thread,it would close when the mainloop() closes
-        ap_threading.start()                                  #Thread starts
+            move.destroy()
+            scGear.moveInit()
+        ap_threading = threading.Thread(target=ap_thread)
+        ap_threading.setDaemon(True)
+        ap_threading.start()
         if OLED_connection:
             screen.screen_show(2, 'AP Starting 10%')
-        RL.setColor(0,16,50)
+        RL.setColor(0, 16, 50)
         time.sleep(1)
         if OLED_connection:
             screen.screen_show(2, 'AP Starting 30%')
-        RL.setColor(0,16,100)
+        RL.setColor(0, 16, 100)
         time.sleep(1)
         if OLED_connection:
             screen.screen_show(2, 'AP Starting 50%')
-        RL.setColor(0,16,150)
+        RL.setColor(0, 16, 150)
         time.sleep(1)
         if OLED_connection:
             screen.screen_show(2, 'AP Starting 70%')
-        RL.setColor(0,16,200)
+        RL.setColor(0, 16, 200)
         time.sleep(1)
         if OLED_connection:
             screen.screen_show(2, 'AP Starting 90%')
-        RL.setColor(0,16,255)
+        RL.setColor(0, 16, 255)
         time.sleep(1)
         if OLED_connection:
             screen.screen_show(2, 'AP Starting 100%')
-        RL.setColor(35,255,35)
+        RL.setColor(35, 255, 35)
         if OLED_connection:
             screen.screen_show(2, 'IP:192.168.12.1')
             screen.screen_show(3, 'AP MODE ON')
@@ -387,101 +309,70 @@ async def recv_msg(websocket):
     move.setup()
     direction_command = 'no'
     turn_command = 'no'
-
     while True: 
         response = {
-            'status' : 'ok',
-            'title' : '',
-            'data' : None
+            'status': 'ok',
+            'title': '',
+            'data': None
         }
-
-        data = ''
         data = await websocket.recv()
-        # try:
-        #     data = await websocket.recv()
-        # except:
-        #     print("WEB interface disconnected!")
-        #     move.destroy()      # motor stop.
-        #     scGear.moveInit()   # servo  back initial position.
-
         try:
             data = json.loads(data)
         except Exception as e:
             print('not A JSON')
-
         if not data:
             continue
-
-        if isinstance(data,str):
+        if isinstance(data, str):
             robotCtrl(data, response)
-
             switchCtrl(data, response)
-
             functionSelect(data, response)
-
             configPWM(data, response)
-
-            if 'get_info' == data:
+            if data == 'get_info':
                 response['title'] = 'get_info'
                 response['data'] = [info.get_cpu_tempfunc(), info.get_cpu_use(), info.get_ram_info()]
-
             if 'wsB' in data:
                 try:
-                    set_B=data.split()
+                    set_B = data.split()
                     speed_set = int(set_B[1])
                 except:
                     pass
-
-            elif 'AR' == data:
+            elif data == 'AR':
                 modeSelect = 'AR'
                 screen.screen_show(4, 'ARM MODE ON')
                 try:
                     fpv.changeMode('ARM MODE ON')
                 except:
                     pass
-
-            elif 'PT' == data:
+            elif data == 'PT':
                 modeSelect = 'PT'
                 screen.screen_show(4, 'PT MODE ON')
                 try:
                     fpv.changeMode('PT MODE ON')
                 except:
                     pass
-
-            #CVFL
-            elif 'CVFL' == data:
+            elif data == 'CVFL':
                 flask_app.modeselect('findlineCV')
-
             elif 'CVFLColorSet' in data:
                 color = int(data.split()[1])
                 flask_app.camera.colorSet(color)
-
             elif 'CVFLL1' in data:
                 pos = int(data.split()[1])
                 flask_app.camera.linePosSet_1(pos)
-
             elif 'CVFLL2' in data:
                 pos = int(data.split()[1])
                 flask_app.camera.linePosSet_2(pos)
-
             elif 'CVFLSP' in data:
                 err = int(data.split()[1])
                 flask_app.camera.errorSet(err)
-
-            elif 'defEC' in data:#Z
+            elif 'defEC' in data:
                 fpv.defaultExpCom()
-
-        elif(isinstance(data,dict)):
+        elif isinstance(data, dict):
             if data['title'] == "findColorSet":
                 color = data['data']
-                flask_app.colorFindSet(color[0],color[1],color[2])
-
+                flask_app.colorFindSet(color[0], color[1], color[2])
         if not functionMode:
             if OLED_connection:
-                screen.screen_show(5,'Functions OFF')
-        else:
-            pass
-
+                screen.screen_show(5, 'Functions OFF')
         print(data)
         response = json.dumps(response)
         await websocket.send(response)
@@ -493,29 +384,24 @@ async def main_logic(websocket, path):
 def test_Network_Connection():
     while True:
         try:
-            # print("test Network Connection status")
-            s =socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-            s.connect(("1.1.1.1",80))
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("1.1.1.1", 80))
             s.close()
         except:
-            # print("error!!")
             move.destroy()
-        
         time.sleep(0.5)
 
 if __name__ == '__main__':
     switch.switchSetup()
     switch.set_all_switch_off()
-
     HOST = ''
-    PORT = 10223                              #Define port serial 
-    BUFSIZ = 1024                             #Define buffer size
+    PORT = 10223
+    BUFSIZ = 1024
     ADDR = (HOST, PORT)
-
     global flask_app
     flask_app = app.webapp()
     flask_app.startthread()
-
+    
     """ 
     If the Raspberry Pi is disconnected from the Internet, stop the car from moving.
     Reconnect to the network, you can continue to control the car.
@@ -528,32 +414,29 @@ if __name__ == '__main__':
 
 
     try:
-        RL=robotLight.RobotLight()
+        RL = robotLight.RobotLight()
         RL.start()
-        RL.breath(70,70,255)
+        RL.breath(70, 70, 255)
     except:
-        print('Use "sudo pip3 install rpi_ws281x" to install WS_281x package\n使用"sudo pip3 install rpi_ws281x"命令来安装rpi_ws281x')
+        print('Use "sudo pip3 install rpi_ws281x" to install WS_281x package')
         pass
-
-    while  1:
+    while True:
         wifi_check()
-        try:                  #Start server,waiting for client
+        try:
             start_server = websockets.serve(main_logic, '0.0.0.0', 8888)
             asyncio.get_event_loop().run_until_complete(start_server)
             print('waiting for connection...')
-            # print('...connected from :', addr)
             break
         except Exception as e:
             print(e)
-            RL.setColor(0,0,0)
-
+            RL.setColor(0, 0, 0)
         try:
-            RL.setColor(0,80,255)
+            RL.setColor(0, 80, 255)
         except:
             pass
     try:
         asyncio.get_event_loop().run_forever()
     except Exception as e:
         print(e)
-        RL.setColor(0,0,0)
+        RL.setColor(0, 0, 0)
         move.destroy()
