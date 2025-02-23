@@ -72,7 +72,9 @@ run_command("apt-get install -y util-linux procps hostapd iproute2 iw haveged dn
 run_command("pip3 install --break-system-packages --upgrade luma.oled")
 # Use the CircuitPython version for PCA9685 (do not install legacy adafruit-pca9685)
 run_command("pip3 install adafruit-blinka adafruit-circuitpython-pca9685")
-run_command("pip3 install --break-system-packages rpi_ws281x")
+#run_command("pip3 install --break-system-packages rpi_ws281x")
+# For raspberryPI 5 we need to use a beta version 
+run_command("pip3 install --break-system-packages https://github.com/rpi-ws281x/rpi-ws281x-python/releases/download/pi5-beta2/rpi_ws281x-6.0.0-cp311-cp311-linux_aarch64.whl")
 run_command("pip3 install --break-system-packages mpu6050-raspberrypi")
 run_command("pip3 install --break-system-packages flask")
 run_command("pip3 install --break-system-packages flask_cors")

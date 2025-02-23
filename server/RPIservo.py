@@ -7,8 +7,6 @@
 from __future__ import division
 import time
 import threading
-import sys
-import RPi.GPIO as GPIO
 import random
 
 # --- CircuitPython Imports ---
