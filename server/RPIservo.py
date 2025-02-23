@@ -286,7 +286,7 @@ if __name__ == '__main__':
 		sc.singleServo(0, -1, 30)
 		time.sleep(1)
 		'''
-		'''
+        '''
 		delaytime = 5
 		sc.certSpeed([0,7], [60,0], [40,60])
 		print('xx1xx')
@@ -299,7 +299,7 @@ if __name__ == '__main__':
 		# sc.moveServoInit([0])
 		# time.sleep(delaytime)
 		'''
-		'''
+        '''
 		pwm.set_pwm(0,0,560)
 		time.sleep(1)
 		pwm.set_pwm(0,0,100)

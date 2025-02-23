@@ -1,53 +1,26 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 # File name   : Ultrasonic.py
-# Description : Detection distance and tracking with ultrasonic
+# Description : Distance detection and tracking using gpiozero's DistanceSensor
 # Website     : www.gewbot.com
-# Author      : William
-# Date        : 2019/02/23
-import RPi.GPIO as GPIO
+# Author      : William (modified by ChatGPT)
+# Date        : 2019/02/23 (updated for gpiozero)
+
+import sys
+sys.path.append('/usr/lib/python3/dist-packages')
+
+from gpiozero import DistanceSensor
 import time
+# Configure o sensor ultrassônico:
+# Trigger conectado ao pino 11 e Echo ao pino 8
+# max_distance define a distância máxima que o sensor irá medir (em metros)
+sensor = DistanceSensor(echo=8, trigger=11, max_distance=4)
 
-Tr = 11
-Ec = 8
-
-GPIO.setwarnings(False)
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(Tr, GPIO.OUT,initial=GPIO.LOW)
-GPIO.setup(Ec, GPIO.IN)
-
-
-def checkdist():       #Reading distance
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(Tr, GPIO.OUT,initial=GPIO.LOW)
-    GPIO.setup(Ec, GPIO.IN)
-    GPIO.output(Tr, GPIO.HIGH)
-    time.sleep(0.000015)
-    GPIO.output(Tr, GPIO.LOW)
-    while not GPIO.input(Ec):
-        pass
-    t1 = time.time()
-    while GPIO.input(Ec):
-        pass
-    t2 = time.time()
-    return round((t2-t1)*340/2,2)
-    #return (t2-t1)*340/2
-
-# def checkdist():       #Reading distance
-#     GPIO.output(Tr, GPIO.HIGH)
-#     time.sleep(0.000015)
-#     GPIO.output(Tr, GPIO.LOW)
-#     while not GPIO.input(Ec):
-#         pass
-#     t1 = time.time()
-#     while GPIO.input(Ec):
-#         t3 = time.time()
-#         if ((t3-t1)*340/2)>=2:
-#             break
-#         pass
-#     t2 = time.time()
-#     return round((t2-t1)*340/2,2)
+def checkdist():
+    # DistanceSensor.distance retorna a distância em metros.
+    # Se preferir em metros, apenas arredonde:
+    return round(sensor.distance, 2)
 
 if __name__ == '__main__':
-    while 1:
+    while True:
         print(checkdist())
         time.sleep(1)

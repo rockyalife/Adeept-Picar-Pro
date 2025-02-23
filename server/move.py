@@ -1,151 +1,166 @@
 #!/usr/bin/env python3
 # File name   : move.py
-# Description : Control Motor
+# Description : Control Motor using gpiozero
 # Product     : GWR
 # Website     : www.gewbot.com
-# Author      : William
-# Date        : 2019/07/24
+# Author      : William (modified by ChatGPT)
+# Date        : 2019/07/24 (updated for gpiozero)
+
 import time
-import RPi.GPIO as GPIO
+from gpiozero import PWMOutputDevice, DigitalOutputDevice
+from gpiozero import Device
+from gpiozero.pins.lgpio import LGPIOFactory
 
-# motor_EN_A: Pin7  |  motor_EN_B: Pin11
-# motor_A:  Pin8,Pin10    |  motor_B: Pin13,Pin12
+Device.pin_factory = LGPIOFactory()
+# Define motor pins (BCM numbering)
+# Motor A: Enable on pin 4, Direction pins on 26 and 21
+# Motor B: Enable on pin 17, Direction pins on 27 and 18
+MOTOR_A_EN    = 4
+MOTOR_B_EN    = 17
 
-Motor_A_EN    = 4
-Motor_B_EN    = 17
+MOTOR_A_Pin1  = 26
+MOTOR_A_Pin2  = 21
+MOTOR_B_Pin1  = 27
+MOTOR_B_Pin2  = 18
 
-Motor_A_Pin1  = 26
-Motor_A_Pin2  = 21
-Motor_B_Pin1  = 27
-Motor_B_Pin2  = 18
-
+# Define directions constants
 Dir_forward   = 0
 Dir_backward  = 1
 
+# Define motor direction flags (adjust these to reverse motor if needed)
 left_forward  = 1
 left_backward = 0
 
 right_forward = 0
 right_backward= 1
 
-pwn_A = 0
-pwm_B = 0
+# Create gpiozero devices for Motor A
+motor_a_enable = PWMOutputDevice(MOTOR_A_EN, frequency=1000)
+motor_a_pin1 = DigitalOutputDevice(MOTOR_A_Pin1)
+motor_a_pin2 = DigitalOutputDevice(MOTOR_A_Pin2)
 
-def motorStop():#Motor stops
-	GPIO.output(Motor_A_Pin1, GPIO.LOW)
-	GPIO.output(Motor_A_Pin2, GPIO.LOW)
-	GPIO.output(Motor_B_Pin1, GPIO.LOW)
-	GPIO.output(Motor_B_Pin2, GPIO.LOW)
-	GPIO.output(Motor_A_EN, GPIO.LOW)
-	GPIO.output(Motor_B_EN, GPIO.LOW)
+# Create gpiozero devices for Motor B
+motor_b_enable = PWMOutputDevice(MOTOR_B_EN, frequency=1000)
+motor_b_pin1 = DigitalOutputDevice(MOTOR_B_Pin1)
+motor_b_pin2 = DigitalOutputDevice(MOTOR_B_Pin2)
 
+def motorStop():
+    """Stop both motors."""
+    print('Both motors stopping...')
+    motor_a_pin1.off()
+    motor_a_pin2.off()
+    motor_b_pin1.off()
+    motor_b_pin2.off()
+    motor_a_enable.value = 0
+    motor_b_enable.value = 0
 
-def setup():#Motor initialization
-	global pwm_A, pwm_B
-	GPIO.setwarnings(False)
-	GPIO.setmode(GPIO.BCM)
-	GPIO.setup(Motor_A_EN, GPIO.OUT)
-	GPIO.setup(Motor_B_EN, GPIO.OUT)
-	GPIO.setup(Motor_A_Pin1, GPIO.OUT)
-	GPIO.setup(Motor_A_Pin2, GPIO.OUT)
-	GPIO.setup(Motor_B_Pin1, GPIO.OUT)
-	GPIO.setup(Motor_B_Pin2, GPIO.OUT)
+def setup():
+    """Initialize motor control (gpiozero devices are already created)."""
+    motorStop()
+    # No additional setup is required with gpiozero.
 
-	motorStop()
-	try:
-		pwm_A = GPIO.PWM(Motor_A_EN, 1000)
-		pwm_B = GPIO.PWM(Motor_B_EN, 1000)
-	except:
-		pass
+def motor_left(status, direction, speed):
+    """
+    Control left motor (Motor B).
+    :param status: 0 to stop, 1 to run
+    :param direction: Dir_forward or Dir_backward
+    :param speed: 0-100 (percentage)
+    """
+    if status == 0:
+        motor_b_pin1.off()
+        motor_b_pin2.off()
+        motor_b_enable.value = 0
+    else:
+        if direction == Dir_backward:
+            motor_b_pin1.on()
+            motor_b_pin2.off()
+            motor_b_enable.value = speed / 100.0
+        elif direction == Dir_forward:
+            motor_b_pin1.off()
+            motor_b_pin2.on()
+            motor_b_enable.value = speed / 100.0
 
+def motor_right(status, direction, speed):
+    """
+    Control right motor (Motor A).
+    :param status: 0 to stop, 1 to run
+    :param direction: Dir_forward or Dir_backward
+    :param speed: 0-100 (percentage)
+    """
+    if status == 0:
+        motor_a_pin1.off()
+        motor_a_pin2.off()
+        motor_a_enable.value = 0
+    else:
+        if direction == Dir_forward:
+            motor_a_pin1.on()
+            motor_a_pin2.off()
+            motor_a_enable.value = speed / 100.0
+        elif direction == Dir_backward:
+            motor_a_pin1.off()
+            motor_a_pin2.on()
+            motor_a_enable.value = speed / 100.0
+    return direction
 
-def motor_left(status, direction, speed):#Motor 2 positive and negative rotation
-	if status == 0: # stop
-		GPIO.output(Motor_B_Pin1, GPIO.LOW)
-		GPIO.output(Motor_B_Pin2, GPIO.LOW)
-		GPIO.output(Motor_B_EN, GPIO.LOW)
-	else:
-		if direction == Dir_backward:
-			GPIO.output(Motor_B_Pin1, GPIO.HIGH)
-			GPIO.output(Motor_B_Pin2, GPIO.LOW)
-			pwm_B.start(100)
-			pwm_B.ChangeDutyCycle(speed)
-		elif direction == Dir_forward:
-			GPIO.output(Motor_B_Pin1, GPIO.LOW)
-			GPIO.output(Motor_B_Pin2, GPIO.HIGH)
-			pwm_B.start(0)
-			pwm_B.ChangeDutyCycle(speed)
-
-
-def motor_right(status, direction, speed):#Motor 1 positive and negative rotation
-	if status == 0: # stop
-		GPIO.output(Motor_A_Pin1, GPIO.LOW)
-		GPIO.output(Motor_A_Pin2, GPIO.LOW)
-		GPIO.output(Motor_A_EN, GPIO.LOW)
-	else:
-		if direction == Dir_forward:#
-			GPIO.output(Motor_A_Pin1, GPIO.HIGH)
-			GPIO.output(Motor_A_Pin2, GPIO.LOW)
-			pwm_A.start(100)
-			pwm_A.ChangeDutyCycle(speed)
-		elif direction == Dir_backward:
-			GPIO.output(Motor_A_Pin1, GPIO.LOW)
-			GPIO.output(Motor_A_Pin2, GPIO.HIGH)
-			pwm_A.start(0)
-			pwm_A.ChangeDutyCycle(speed)
-	return direction
-
-
-def move(speed, direction, turn, radius=0.6):   # 0 < radius <= 1  
-	#speed = 100
-	if direction == 'forward':
-		if turn == 'right':
-			motor_left(0, left_backward, int(speed*radius))
-			motor_right(1, right_forward, speed)
-		elif turn == 'left':
-			motor_left(1, left_forward, speed)
-			motor_right(0, right_backward, int(speed*radius))
-		else:
-			motor_left(1, left_forward, speed)
-			motor_right(1, right_forward, speed)
-	elif direction == 'backward':
-		if turn == 'right':
-			motor_left(0, left_forward, int(speed*radius))
-			motor_right(1, right_backward, speed)
-		elif turn == 'left':
-			motor_left(1, left_backward, speed)
-			motor_right(0, right_forward, int(speed*radius))
-		else:
-			motor_left(1, left_backward, speed)
-			motor_right(1, right_backward, speed)
-	elif direction == 'no':
-		if turn == 'right':
-			motor_left(1, left_backward, speed)
-			motor_right(1, right_forward, speed)
-		elif turn == 'left':
-			motor_left(1, left_forward, speed)
-			motor_right(1, right_backward, speed)
-		else:
-			motorStop()
-	else:
-		pass
-
-
-
+def move(speed, direction, turn, radius=0.6):
+    """
+    Move the robot.
+    :param speed: speed percentage (0-100)
+    :param direction: 'forward', 'backward', or 'no'
+    :param turn: 'right', 'left', or 'no'
+    :param radius: turning radius factor (0 < radius <= 1)
+    """
+    if direction == 'forward':
+        if turn == 'right':
+            motor_left(0, left_backward, int(speed * radius))
+            motor_right(1, right_forward, speed)
+        elif turn == 'left':
+            motor_left(1, left_forward, speed)
+            motor_right(0, right_backward, int(speed * radius))
+        else:
+            motor_left(1, left_forward, speed)
+            motor_right(1, right_forward, speed)
+    elif direction == 'backward':
+        if turn == 'right':
+            motor_left(0, left_forward, int(speed * radius))
+            motor_right(1, right_backward, speed)
+        elif turn == 'left':
+            motor_left(1, left_backward, speed)
+            motor_right(0, right_forward, int(speed * radius))
+        else:
+            motor_left(1, left_backward, speed)
+            motor_right(1, right_backward, speed)
+    elif direction == 'no':
+        if turn == 'right':
+            motor_left(1, left_backward, speed)
+            motor_right(1, right_forward, speed)
+        elif turn == 'left':
+            motor_left(1, left_forward, speed)
+            motor_right(1, right_backward, speed)
+        else:
+            motorStop()
+    else:
+        pass
 
 def destroy():
-	motorStop()
-	GPIO.cleanup()             # Release resource
-
+    """Stop motors and clean up."""
+    motorStop()
+    # With gpiozero, explicit cleanup is not required, but you can close devices if needed.
+    motor_a_enable.close()
+    motor_b_enable.close()
+    motor_a_pin1.close()
+    motor_a_pin2.close()
+    motor_b_pin1.close()
+    motor_b_pin2.close()
 
 if __name__ == '__main__':
-	try:
-		speed_set = 60
-		setup()
-		move(speed_set, 'forward', 'no', 0.8)
-		time.sleep(1.3)
-		motorStop()
-		destroy()
-	except KeyboardInterrupt:
-		destroy()
-
+    try:
+        print('Press Ctrl-C to end the program...')
+        speed_set = 60
+        setup()
+        move(speed_set, 'forward', 'no', 0.8)
+        time.sleep(1.3)
+        motorStop()
+        destroy()
+    except KeyboardInterrupt:
+        destroy()

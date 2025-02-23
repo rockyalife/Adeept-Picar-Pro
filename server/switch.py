@@ -1,56 +1,71 @@
-#!/usr/bin/env/python
+#!/usr/bin/env python3
 # File name   : switch.py
-# Production  : HAT
+# Description : Control HAT switches using gpiozero
+# Product     : HAT
 # Website     : www.gewbot.com
-# Author      : William
-# Date        : 2018/08/22
+# Author      : William (modified by ChatGPT)
+# Date        : 2018/08/22 (updated for gpiozero)
 
-import RPi.GPIO as GPIO
 import time
+from gpiozero import DigitalOutputDevice
+
+# Define BCM pins for switches
+PIN_SWITCH_1 = 5
+PIN_SWITCH_2 = 6
+PIN_SWITCH_3 = 13
+
+# Create global DigitalOutputDevice objects for the switches (initially off)
+switch1 = DigitalOutputDevice(PIN_SWITCH_1, active_high=True, initial_value=False)
+switch2 = DigitalOutputDevice(PIN_SWITCH_2, active_high=True, initial_value=False)
+switch3 = DigitalOutputDevice(PIN_SWITCH_3, active_high=True, initial_value=False)
 
 def switchSetup():
-    GPIO.setwarnings(False)
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(5, GPIO.OUT)
-    GPIO.setup(6, GPIO.OUT)
-    GPIO.setup(13, GPIO.OUT)
+    """
+    Setup function for switches.
+    In gpiozero, initialization is done on object creation.
+    This function ensures all switches are off.
+    """
+    global switch1, switch2, switch3
+    switch1.off()
+    switch2.off()
+    switch3.off()
 
 def switch(port, status):
+    """
+    Set the switch state for a given port.
+    :param port: Switch port (1, 2, or 3)
+    :param status: 1 to turn on, 0 to turn off
+    """
     if port == 1:
         if status == 1:
-            GPIO.output(5, GPIO.HIGH)
+            switch1.on()
         elif status == 0:
-            GPIO.output(5,GPIO.LOW)
-        else:
-            pass
+            switch1.off()
     elif port == 2:
         if status == 1:
-            GPIO.output(6, GPIO.HIGH)
+            switch2.on()
         elif status == 0:
-            GPIO.output(6,GPIO.LOW)
-        else:
-            pass
+            switch2.off()
     elif port == 3:
         if status == 1:
-            GPIO.output(13, GPIO.HIGH)
+            switch3.on()
         elif status == 0:
-            GPIO.output(13,GPIO.LOW)
-        else:
-            pass
+            switch3.off()
     else:
-        print('Wrong Command: Example--switch(3, 1)->to switch on port3')
+        print('Wrong Command: Example -- switch(3, 1) to switch on port 3')
 
 def set_all_switch_off():
-    switch(1,0)
-    switch(2,0)
-    switch(3,0)
+    """Turn off all switches."""
+    switch(1, 0)
+    switch(2, 0)
+    switch(3, 0)
 
 if __name__ == "__main__":
     switchSetup()
-    while 1:
-        switch(1,1)
-        switch(2,1)
-        switch(3,1)
+    while True:
+        switch(1, 1)
+        switch(2, 1)
+        switch(3, 1)
         print("Light on...")
         time.sleep(1)
         set_all_switch_off()
